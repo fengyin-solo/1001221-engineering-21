@@ -17,33 +17,67 @@
 ├── backend/                  FastAPI（Python） 后端
 │   ├── app/routers/          每个业务模块一组接口
 │   ├── app/services/         业务规则与状态流转
-│   └── app/store.py          内存数据仓库与示例数据
+│   ├── app/seed.py           启动时自动灌入的示例数据
+│   ├── app/store.py          内存数据仓库
+│   └── requirements.txt      锁定到具体版本的后端依赖
+├── scripts/
+│   ├── dev.sh                make dev 的编排：检查环境→装依赖→拉起前后端
+│   └── check.py              make check 的检查入口
+├── Makefile                  env / install / build / dev / check
+├── .env.example              必填环境变量样例（APP_ENV）
 ├── .gitignore
 └── docker-compose.yml
 ```
 
-## 启动
+## 从零到能用
 
-### 后端
-
-```bash
-cd backend
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-./run.sh
-```
-
-健康检查：`curl http://127.0.0.1:8000/api/health`
-
-### 前端
+前置要求：Python 3.11+、Node.js 20+（自带 npm）。依赖版本已全部锁定
+（后端 `backend/requirements.txt`，前端 `frontend/package-lock.json`），
+任何机器装出来的版本完全一致。
 
 ```bash
-cd frontend
-npm install
-npm run dev
+cp .env.example .env   # 或 make env，只需一次
+make dev               # 一条命令：检查环境 → 装依赖 → 灌示例数据 → 拉起前后端
 ```
 
-前端默认监听 `http://127.0.0.1:5173/`，dev server 不会自动打开浏览器，
-需要自己访问。`/api` 由 vite 代理到后端 `http://127.0.0.1:8000`。
+启动后：
+
+- 后端 `http://127.0.0.1:8000`，健康检查 `curl http://127.0.0.1:8000/api/health`
+- 前端 `http://127.0.0.1:5173`，dev server 不会自动打开浏览器，按终端地址手工访问；
+  `/api` 由 vite 代理到后端 `http://127.0.0.1:8000`
+- 后端启动日志会打印 `[seed] 示例数据已灌入 …`，其中运力调度是一条完整链路：
+  待调度（待派车）→ 已调度 → 运输中 → 已抵达，指派车辆/指派司机与车辆档案、
+  司机管理里的数据一一对应，可直接演示派车全流程
+
+### 验证派车链路
+
+另开一个终端执行：
+
+```bash
+make check
+```
+
+依次检查健康检查、示例数据链路完整性、调度创建（`POST /api/dispatch3`）、
+指派车辆动作（`POST /api/dispatch3/{id}/actions`）与列表过滤，全部通过会打印
+`全部通过：调度创建与指派车辆接口均可正常返回。`
+
+### 启动失败怎么定位
+
+启动脚本会把失败原因分成两类打在终端上：
+
+- `依赖缺失：…` —— python3/node/npm 不存在、venv 创建失败、pip/npm 装依赖失败，
+  按提示装对应工具或检查网络即可
+- `环境变量未配置：…` —— 缺少 `.env` 或 `APP_ENV` 未设置，执行 `cp .env.example .env` 后重试
+
+### 常用命令
+
+| 命令 | 作用 |
+| --- | --- |
+| `make dev` | 从零到能用的一条命令（推荐） |
+| `make check` | 检查调度创建与指派车辆接口 |
+| `make install` | 只装依赖（锁定版本） |
+| `make build` | 前端生产构建（含类型检查） |
+| `make backend` / `make frontend` | 单独起后端 / 前端 |
 
 ## 业务模块
 

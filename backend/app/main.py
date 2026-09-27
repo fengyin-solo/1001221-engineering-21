@@ -5,6 +5,9 @@
 """
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,7 +15,23 @@ from app.config import settings
 from app.routers import ROUTERS
 from app.store import store
 
-app = FastAPI(title="冷链物流运输管理平台", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """启动时确认示例数据已灌入，并把调度链路各状态数量打到日志里。"""
+    total = sum(len(store.rows(name)) for name in store.module_names())
+    chain: dict[str, int] = {}
+    for row in store.rows("dispatch3"):
+        chain[str(row.get("status"))] = chain.get(str(row.get("status")), 0) + 1
+    chain_text = " / ".join(f"{status} {count} 条" for status, count in chain.items())
+    print(
+        f"[seed] 示例数据已灌入 {len(store.module_names())} 个模块共 {total} 条；"
+        f"运力调度链路：{chain_text}"
+    )
+    yield
+
+
+app = FastAPI(title="冷链物流运输管理平台", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
