@@ -30,7 +30,7 @@ def list_entries(
     return PageResult(items=items, total=total, page=page, size=size)
 
 
-@router.get("/{entry_id}", response_model=dict)
+@router.get("/{entry_id:int}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
     """读取单条运输委托单明细；不存在时给出可读的错误说明。"""
     entry = service.get_entry(entry_id)

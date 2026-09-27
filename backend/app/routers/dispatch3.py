@@ -30,7 +30,15 @@ def list_entries(
     return PageResult(items=items, total=total, page=page, size=size)
 
 
-@router.get("/{entry_id}", response_model=dict)
+# 注意：/export 必须声明在 /{entry_id} 之前，否则「export」会被当成 entry_id 解析。
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出运力调度清单：返回当前全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "dispatch3", "total": total, "items": items}
+
+
+@router.get("/{entry_id:int}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
     """读取单条调度任务明细；不存在时给出可读的错误说明。"""
     entry = service.get_entry(entry_id)
@@ -44,22 +52,18 @@ def create_entry(payload: EntryPayload) -> ActionResult:
     """登记一条调度任务，缺字段时说明原因而不是静默丢弃。"""
     entry, missing = service.create_entry(payload.values)
     if missing:
-        return ActionResult(ok=False, message=f"缺少必填字段：{'、'.join(missing)}")
-    return ActionResult(ok=True, message="调度任务已登记", entry=entry)
+        return ActionResult(ok=False, message=f"{'、'.join(missing)}，调度任务未登记")
+    return ActionResult(ok=True, message="调度任务已登记，状态：待调度", entry=entry)
 
 
 @router.post("/{entry_id}/actions", response_model=ActionResult)
 def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
-    """对单条调度任务执行指派调度、确认发出、确认抵达；不允许的动作会被拦下并说明原因。"""
+    """对单条调度任务执行指派调度、确认发出、确认抵达；不允许的动作会被拦下并说明原因。
+
+    「指派调度」时在 values 里带上 指派车辆 / 指派司机 / 调度人员。
+    """
     action = str(payload.values.get("action") or "").strip()
-    entry, message = service.run_action(entry_id, action)
+    entry, message = service.run_action(entry_id, action, payload.values)
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出运力调度清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "dispatch3", "total": total, "items": items}
